@@ -12,10 +12,16 @@ function hostTokens(host) {
 }
 
 function searchableEntryText(entry) {
-  return [entry.issuer, entry.account, entry.label, ...(entry.domains || [])]
+  return [entry.issuer, entry.account, entry.label, entry.note, ...(entry.domains || [])]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
+}
+
+function issuerToDomainToken(issuer) {
+  if (!issuer) return '';
+  const normalized = issuer.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return normalized.length >= 3 ? normalized : '';
 }
 
 function scoreEntry(entry, host) {
@@ -26,6 +32,8 @@ function scoreEntry(entry, host) {
   }
   const text = searchableEntryText(entry);
   if (text.includes(normalizedHost)) return 80;
+  const issuerToken = issuerToDomainToken(entry.issuer);
+  if (issuerToken && normalizedHost.includes(issuerToken)) return 70;
   let score = 0;
   for (const token of hostTokens(normalizedHost)) {
     if (text.includes(token)) score += 10;
