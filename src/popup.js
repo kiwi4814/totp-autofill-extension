@@ -90,7 +90,7 @@ async function renderEntries() {
     card.querySelector('.entry-title').textContent = entry.issuer || entry.label;
     card.querySelector('.entry-subtitle').textContent = entry.account || entry.label;
     card.querySelector('.code').textContent = code;
-    card.querySelector('.countdown').textContent = `${remaining}s`;
+    card.querySelector('.countdown').textContent = `${remaining}秒`;
     card.querySelector('.copy').addEventListener('click', () => copyCode(code).catch((error) => setStatus(error.message, true)));
     const fillButton = card.querySelector('.fill');
     fillButton.textContent = fallbackMode ? `绑定 ${currentHost || '当前网站'} 并填充` : '填充当前网站';

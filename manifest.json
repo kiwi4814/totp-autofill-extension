@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Local TOTP Autofill",
-  "description": "Local-only TOTP code generator and one-click 2FA autofill for personal use.",
+  "description": "本地 TOTP 验证码生成器，一键自动填充 2FA，数据仅存本地。",
   "version": "0.1.0",
   "action": {
     "default_title": "Local TOTP Autofill",

@@ -133,10 +133,10 @@ async function pbkdf2(password, salt, iterations, length) {
 
 export async function scrypt(password, salt, n, r, p, dkLen) {
   if (n <= 1 || (n & (n - 1)) !== 0) {
-    throw new Error('scrypt N must be a power of two greater than 1');
+    throw new Error('scrypt 参数 N 必须是大于 1 的 2 的幂');
   }
   if (r <= 0 || p <= 0 || dkLen <= 0) {
-    throw new Error('Invalid scrypt parameters');
+    throw new Error('scrypt 参数无效');
   }
 
   const b = await pbkdf2(password, salt, 1, p * 128 * r);

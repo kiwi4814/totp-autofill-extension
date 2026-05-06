@@ -38,7 +38,7 @@ async function decodeQrImage(file) {
 
 function entryMatches(entry, query) {
   if (!query) return true;
-  return [entry.issuer, entry.account, entry.label, ...(entry.domains || [])]
+  return [entry.issuer, entry.account, entry.label, entry.note, ...(entry.domains || [])]
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
@@ -52,11 +52,12 @@ function domainsText(entry) {
 async function saveCard(card, entry) {
   const issuer = card.querySelector('.edit-issuer').value;
   const account = card.querySelector('.edit-account').value;
+  const note = card.querySelector('.edit-note').value;
   const domains = card.querySelector('.edit-domains').value
     .split(/[\n,，]/)
     .map((domain) => domain.trim())
     .filter(Boolean);
-  await updateEntry(entry.id, { issuer, account, domains });
+  await updateEntry(entry.id, { issuer, account, note, domains });
   setStatus(`已保存 ${issuer || account || entry.label}`);
   await renderEntries();
 }
@@ -78,17 +79,19 @@ async function renderEntries() {
         </div>
         <button class="danger delete">删除</button>
       </div>
-      <label>Issuer <input class="edit-issuer" type="text"></label>
-      <label>Account <input class="edit-account" type="text"></label>
+      <label>服务商 <input class="edit-issuer" type="text"></label>
+      <label>名称 <input class="edit-account" type="text"></label>
+      <label>备注 <input class="edit-note" type="text"></label>
       <label>匹配域名 <textarea class="edit-domains" placeholder="github.com, login.example.com"></textarea></label>
       <div class="small-actions">
         <button class="primary save">保存信息</button>
       </div>
     `;
     card.querySelector('.entry-title').textContent = entry.label;
-    card.querySelector('.entry-subtitle').textContent = `${entry.algorithm} · ${entry.digits} 位 · ${entry.period}s`;
+    card.querySelector('.entry-subtitle').textContent = `哈希函数: ${entry.algorithm} · 位数: ${entry.digits} · 时间间隔: ${entry.period}秒`;
     card.querySelector('.edit-issuer').value = entry.issuer || '';
     card.querySelector('.edit-account').value = entry.account || '';
+    card.querySelector('.edit-note').value = entry.note || '';
     card.querySelector('.edit-domains').value = domainsText(entry);
     card.querySelector('.save').addEventListener('click', () => saveCard(card, entry).catch((error) => setStatus(error.message, true)));
     card.querySelector('.delete').addEventListener('click', async () => {

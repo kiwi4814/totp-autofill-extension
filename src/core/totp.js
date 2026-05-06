@@ -30,7 +30,7 @@ function counterToBytes(counter) {
 export function normalizeAlgorithm(algorithm = 'SHA1') {
   const normalized = ALGORITHM_NAMES.get(String(algorithm).toUpperCase().replace(/_/g, '-'));
   if (!normalized) {
-    throw new Error(`Unsupported TOTP algorithm: ${algorithm}`);
+    throw new Error(`不支持的哈希函数: ${algorithm}`);
   }
   return normalized;
 }

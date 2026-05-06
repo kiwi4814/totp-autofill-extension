@@ -9,6 +9,8 @@ const DEFAULT_ENTRY = Object.freeze({
   digits: 6,
   period: 30,
   domains: [],
+  note: '',
+  groups: [],
 });
 
 
@@ -52,10 +54,12 @@ export function normalizeEntry(entry) {
     digits: Number(entry.digits || 6),
     period: Number(entry.period || 30),
     domains: normalizeDomains(entry.domains),
+    note: String(entry.note || '').trim(),
+    groups: Array.isArray(entry.groups) ? entry.groups : [],
   };
   normalized.label = normalized.issuer && normalized.account
     ? `${normalized.issuer}: ${normalized.account}`
-    : normalized.issuer || normalized.account || 'Unnamed TOTP';
+    : normalized.issuer || normalized.account || '未命名条目';
   normalized.id = entry.id || stableEntryId(normalized) || `otp_${nowIdPrefix()}`;
   return normalized;
 }
@@ -72,13 +76,13 @@ function splitOtpLabel(pathname, issuerParam) {
 export function parseOtpAuthUri(uri) {
   const parsed = new URL(uri);
   if (parsed.protocol !== 'otpauth:' || parsed.hostname !== 'totp') {
-    throw new Error('Only otpauth://totp URIs are supported');
+    throw new Error('仅支持 otpauth://totp 格式的 URI');
   }
   const issuerParam = parsed.searchParams.get('issuer') || '';
   const label = splitOtpLabel(parsed.pathname, issuerParam);
   const secret = parsed.searchParams.get('secret');
   if (!secret) {
-    throw new Error('otpauth URI does not contain a secret');
+    throw new Error('otpauth URI 中没有包含 secret 参数');
   }
   return normalizeEntry({
     issuer: label.issuer,
@@ -93,7 +97,7 @@ export function parseOtpAuthUri(uri) {
 function entriesFromAegisData(data) {
   const entries = data.db?.entries || data.entries;
   if (!Array.isArray(entries)) {
-    throw new Error('No Aegis entries found');
+    throw new Error('没有找到 Aegis 条目');
   }
   return entries
     .filter((entry) => String(entry.type || '').toLowerCase() === 'totp')
@@ -103,6 +107,8 @@ function entriesFromAegisData(data) {
       secret: entry.info?.secret || entry.secret,
       algorithm: entry.info?.algo || entry.info?.algorithm || 'SHA1',
       digits: entry.info?.digits || 6,
+      note: entry.note || '',
+      groups: entry.groups || [],
       period: entry.info?.period || 30,
     }));
 }
@@ -114,7 +120,7 @@ function isEncryptedAegisVault(data) {
 function passwordSlotFrom(header) {
   const slot = header.slots.find((candidate) => Number(candidate.type) === 1);
   if (!slot) {
-    throw new Error('Encrypted Aegis export does not contain a password slot');
+    throw new Error('加密的 Aegis 导出文件中没有密码槽位');
   }
   return slot;
 }
@@ -129,13 +135,13 @@ async function aesGcmDecrypt(keyBytes, cipherBytes, params) {
       sealed,
     ));
   } catch (error) {
-    throw new Error('Aegis decryption failed. Check the backup password.');
+    throw new Error('Aegis 解密失败，请检查备份密码是否正确');
   }
 }
 
 async function decryptAegisVault(data, password) {
   if (!password) {
-    throw new Error('Aegis backup password is required for encrypted exports');
+    throw new Error('导入加密的 Aegis 备份需要输入密码');
   }
   const slot = passwordSlotFrom(data.header);
   const passwordBytes = new TextEncoder().encode(password);
@@ -158,7 +164,7 @@ export async function importAegisJson(text, { password } = {}) {
     return entriesFromAegisData(await decryptAegisVault(data, password));
   }
   if (data.header?.slots || data.db?.encrypted || data.encrypted) {
-    throw new Error('Unsupported encrypted Aegis export format');
+    throw new Error('不支持的加密 Aegis 导出格式');
   }
   return entriesFromAegisData(data);
 }
@@ -175,14 +181,14 @@ function readVarint(bytes, state) {
     }
     shift += 7n;
   }
-  throw new Error('Unexpected end of protobuf varint');
+  throw new Error('protobuf varint 数据意外截断');
 }
 
 function readBytes(bytes, state) {
   const length = Number(readVarint(bytes, state));
   const end = state.offset + length;
   if (end > bytes.length) {
-    throw new Error('Unexpected end of protobuf bytes field');
+    throw new Error('protobuf 字节字段数据意外截断');
   }
   const value = bytes.slice(state.offset, end);
   state.offset = end;
@@ -206,7 +212,7 @@ function skipField(bytes, state, wireType) {
     state.offset += 8;
     return;
   }
-  throw new Error(`Unsupported protobuf wire type: ${wireType}`);
+  throw new Error(`不支持的 protobuf wire type: ${wireType}`);
 }
 
 function parseOtpParameters(bytes) {
@@ -233,11 +239,11 @@ function parseOtpParameters(bytes) {
 function getMigrationPayloadBytes(uri) {
   const parsed = new URL(uri);
   if (parsed.protocol !== 'otpauth-migration:') {
-    throw new Error('Expected otpauth-migration:// URI');
+    throw new Error('需要 otpauth-migration:// 格式的 URI');
   }
   const data = parsed.searchParams.get('data');
   if (!data) {
-    throw new Error('Google Authenticator migration URI does not contain data');
+    throw new Error('Google Authenticator 迁移 URI 中没有包含数据');
   }
   return base64ToBytes(data);
 }
@@ -285,5 +291,5 @@ export async function importAnyText(text, options = {}) {
   if (trimmed.startsWith('otpauth://')) return [parseOtpAuthUri(trimmed)];
   if (trimmed.startsWith('otpauth-migration://')) return importGoogleMigrationUri(trimmed);
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) return importAegisJson(trimmed, options);
-  throw new Error('Unsupported import text. Paste Aegis JSON, otpauth://, or otpauth-migration:// content.');
+  throw new Error('不支持的导入格式，请粘贴 Aegis JSON、otpauth:// 或 otpauth-migration:// 内容');
 }

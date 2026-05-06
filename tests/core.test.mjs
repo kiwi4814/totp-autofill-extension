@@ -200,7 +200,7 @@ test('importAegisJson asks for a password for encrypted Aegis exports', async ()
   const aegis = await encryptedAegisFixture('correct horse battery staple');
   await assert.rejects(
     () => importAegisJson(aegis),
-    /Aegis backup password is required/,
+    /导入加密的 Aegis 备份需要输入密码/,
   );
 });
 
@@ -277,4 +277,16 @@ test('findEntriesForHost ranks domain aliases ahead of generic text matches', ()
   assert.equal(normalizeHost('https://www.github.com/login'), 'github.com');
   const matches = findEntriesForHost(entries, 'https://github.com/sessions/two-factor');
   assert.deepEqual(matches.map((entry) => entry.issuer), ['GitHub', 'Work Git']);
+});
+
+test('findEntriesForHost fuzzy-matches issuer name against host', () => {
+  const entries = [
+    { issuer: 'HDHome', account: 'kiwi4814', domains: [] },
+    { issuer: 'RedLeaves', account: 'kiwi4814', domains: [] },
+    { issuer: 'U2', account: 'kiwi4814', domains: [] },
+  ];
+
+  const matches = findEntriesForHost(entries, 'https://hdhome.me/login');
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].issuer, 'HDHome');
 });
