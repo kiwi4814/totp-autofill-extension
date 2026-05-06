@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Dependencies / package manager
+node_modules/
+
+# Build and coverage outputs
+dist/
+build/
+coverage/
+*.log
+
+# Local OMX runtime state
+.omx/

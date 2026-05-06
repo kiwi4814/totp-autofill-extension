@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local TOTP Autofill</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>本地 2FA</h1>
+      <button id="openOptions">导入/管理</button>
+    </header>
+    <p id="host" class="muted">读取当前网站...</p>
+    <div id="status" class="status"></div>
+    <section id="entries" class="list"></section>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

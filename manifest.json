@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Local TOTP Autofill",
+  "description": "Local-only TOTP code generator and one-click 2FA autofill for personal use.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Local TOTP Autofill",
+    "default_popup": "src/popup.html"
+  },
+  "options_page": "src/options.html",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ]
+}
