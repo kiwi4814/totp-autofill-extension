@@ -1,6 +1,7 @@
 import { base32Encode, normalizeBase32 } from './base32.js';
 import { base64ToBytes, concatBytes, hexToBytes } from './bytes.js';
 import { scrypt } from './scrypt.js';
+import { normalizeHost } from './matcher.js';
 
 const DEFAULT_ENTRY = Object.freeze({
   type: 'totp',
@@ -9,6 +10,21 @@ const DEFAULT_ENTRY = Object.freeze({
   period: 30,
   domains: [],
 });
+
+
+function normalizeDomains(domains) {
+  if (!Array.isArray(domains)) return [];
+  const normalized = [];
+  for (const domain of domains) {
+    try {
+      const host = normalizeHost(String(domain).trim());
+      if (host && !normalized.includes(host)) normalized.push(host);
+    } catch (_error) {
+      // Ignore invalid manual domain aliases instead of breaking storage reads.
+    }
+  }
+  return normalized;
+}
 
 function nowIdPrefix() {
   return Date.now().toString(36);
@@ -35,7 +51,7 @@ export function normalizeEntry(entry) {
     algorithm: String(entry.algorithm || entry.algo || 'SHA1').toUpperCase().replace('SHA-1', 'SHA1').replace('SHA-256', 'SHA256').replace('SHA-512', 'SHA512'),
     digits: Number(entry.digits || 6),
     period: Number(entry.period || 30),
-    domains: Array.isArray(entry.domains) ? entry.domains.filter(Boolean) : [],
+    domains: normalizeDomains(entry.domains),
   };
   normalized.label = normalized.issuer && normalized.account
     ? `${normalized.issuer}: ${normalized.account}`

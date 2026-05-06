@@ -4,9 +4,11 @@ import { scryptSync } from 'node:crypto';
 
 import { base32Encode, base32Decode } from '../src/core/base32.js';
 import { generateTotp } from '../src/core/totp.js';
-import { importAegisJson, importGoogleMigrationUri, parseOtpAuthUri } from '../src/core/importers.js';
+import { importAegisJson, importGoogleMigrationUri, normalizeEntry, parseOtpAuthUri } from '../src/core/importers.js';
 import { scrypt } from '../src/core/scrypt.js';
 import { findEntriesForHost, normalizeHost } from '../src/core/matcher.js';
+import { addEntryDomain, updateEntry } from '../src/storage.js';
+import { chooseAutofillPlan } from '../src/core/autofill-planner.js';
 
 const textBytes = (text) => new TextEncoder().encode(text);
 
@@ -202,6 +204,68 @@ test('importAegisJson asks for a password for encrypted Aegis exports', async ()
   );
 });
 
+
+
+
+test('chooseAutofillPlan fills single-character OTP input groups digit by digit', () => {
+  const plan = chooseAutofillPlan([
+    { type: 'text', maxLength: 1, value: '', visible: true },
+    { type: 'text', maxLength: 1, value: '', visible: true },
+    { type: 'text', maxLength: 1, value: '', visible: true },
+    { type: 'text', maxLength: 1, value: '', visible: true },
+    { type: 'text', maxLength: 1, value: '', visible: true },
+    { type: 'text', maxLength: 1, value: '', visible: true },
+  ], '123456');
+
+  assert.deepEqual(plan, { mode: 'split', indexes: [0, 1, 2, 3, 4, 5], values: ['1', '2', '3', '4', '5', '6'] });
+});
+
+test('chooseAutofillPlan allows password inputs only when they strongly look like OTP fields', () => {
+  assert.deepEqual(chooseAutofillPlan([
+    { type: 'password', autocomplete: 'current-password', name: 'password', value: '', visible: true },
+    { type: 'password', autocomplete: 'one-time-code', name: 'otp', maxLength: 6, value: '', visible: true },
+  ], '123456'), { mode: 'single', index: 1, value: '123456' });
+});
+
+test('normalizeEntry normalizes and deduplicates domain aliases', () => {
+  const entry = normalizeEntry({
+    issuer: 'GitHub',
+    account: 'alice@example.com',
+    secret: 'JBSWY3DPEHPK3PXP',
+    domains: ['https://www.github.com/login', 'github.com', ' login.github.com '],
+  });
+
+  assert.deepEqual(entry.domains, ['github.com']);
+});
+
+test('storage can update metadata and bind the current host as a domain alias', async () => {
+  const saved = [];
+  globalThis.chrome = {
+    storage: {
+      local: {
+        async get(defaults) {
+          return { totpEntries: saved.length ? saved.at(-1) : defaults.totpEntries };
+        },
+        async set(value) {
+          saved.push(value.totpEntries);
+        },
+      },
+    },
+  };
+
+  const original = normalizeEntry({ issuer: 'GitHub', account: 'old@example.com', secret: 'JBSWY3DPEHPK3PXP' });
+  saved.push([original]);
+
+  await updateEntry(original.id, { account: 'alice@example.com', domains: ['example.com'] });
+  const updated = saved.at(-1)[0];
+  assert.equal(updated.account, 'alice@example.com');
+  assert.deepEqual(updated.domains, ['example.com']);
+
+  await addEntryDomain(original.id, 'https://www.github.com/sessions/two-factor');
+  assert.deepEqual(saved.at(-1)[0].domains, ['example.com', 'github.com']);
+
+  delete globalThis.chrome;
+});
 
 test('findEntriesForHost ranks domain aliases ahead of generic text matches', () => {
   const entries = [

@@ -102,7 +102,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .entry-title { font-weight: 700; }
 .entry-subtitle { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 
-textarea, input[type="search"], input[type="text"] {
+textarea, input[type="search"], input[type="text"], input[type="password"] {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -113,6 +113,9 @@ textarea, input[type="search"], input[type="text"] {
 }
 
 textarea { min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.entry-editor textarea { min-height: 64px; }
+.entry-editor label { display: grid; gap: 5px; color: var(--muted); }
+.entry-editor label input, .entry-editor label textarea { color: var(--text); }
 
 .status {
   min-height: 20px;

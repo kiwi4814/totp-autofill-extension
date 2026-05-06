@@ -1,4 +1,4 @@
-import { addEntries, clearEntries, deleteEntry, getEntries } from './storage.js';
+import { addEntries, clearEntries, deleteEntry, getEntries, updateEntry } from './storage.js';
 import { importAnyText } from './core/importers.js';
 
 const statusEl = document.querySelector('#status');
@@ -45,6 +45,22 @@ function entryMatches(entry, query) {
     .includes(query.toLowerCase());
 }
 
+function domainsText(entry) {
+  return (entry.domains || []).join(', ');
+}
+
+async function saveCard(card, entry) {
+  const issuer = card.querySelector('.edit-issuer').value;
+  const account = card.querySelector('.edit-account').value;
+  const domains = card.querySelector('.edit-domains').value
+    .split(/[\n,，]/)
+    .map((domain) => domain.trim())
+    .filter(Boolean);
+  await updateEntry(entry.id, { issuer, account, domains });
+  setStatus(`已保存 ${issuer || account || entry.label}`);
+  await renderEntries();
+}
+
 async function renderEntries() {
   const entries = (await getEntries()).filter((entry) => entryMatches(entry, searchEl.value.trim()));
   if (!entries.length) {
@@ -53,17 +69,29 @@ async function renderEntries() {
   }
   entriesEl.replaceChildren(...entries.map((entry) => {
     const card = document.createElement('section');
-    card.className = 'card row';
+    card.className = 'card stack entry-editor';
     card.innerHTML = `
-      <div>
-        <div class="entry-title"></div>
-        <div class="entry-subtitle"></div>
+      <div class="row">
+        <div>
+          <div class="entry-title"></div>
+          <div class="entry-subtitle"></div>
+        </div>
+        <button class="danger delete">删除</button>
       </div>
-      <button class="danger">删除</button>
+      <label>Issuer <input class="edit-issuer" type="text"></label>
+      <label>Account <input class="edit-account" type="text"></label>
+      <label>匹配域名 <textarea class="edit-domains" placeholder="github.com, login.example.com"></textarea></label>
+      <div class="small-actions">
+        <button class="primary save">保存信息</button>
+      </div>
     `;
     card.querySelector('.entry-title').textContent = entry.label;
-    card.querySelector('.entry-subtitle').textContent = `${entry.algorithm} · ${entry.digits} 位 · ${entry.period}s · ${entry.domains?.join(', ') || '自动按文本匹配域名'}`;
-    card.querySelector('button').addEventListener('click', async () => {
+    card.querySelector('.entry-subtitle').textContent = `${entry.algorithm} · ${entry.digits} 位 · ${entry.period}s`;
+    card.querySelector('.edit-issuer').value = entry.issuer || '';
+    card.querySelector('.edit-account').value = entry.account || '';
+    card.querySelector('.edit-domains').value = domainsText(entry);
+    card.querySelector('.save').addEventListener('click', () => saveCard(card, entry).catch((error) => setStatus(error.message, true)));
+    card.querySelector('.delete').addEventListener('click', async () => {
       await deleteEntry(entry.id);
       setStatus(`已删除 ${entry.label}`);
       await renderEntries();

@@ -1,4 +1,5 @@
 import { normalizeEntry } from './core/importers.js';
+import { normalizeHost } from './core/matcher.js';
 
 const STORAGE_KEY = 'totpEntries';
 
@@ -20,6 +21,32 @@ export async function addEntries(newEntries) {
     byId.set(entry.id, entry);
   }
   return saveEntries([...byId.values()].sort((a, b) => a.label.localeCompare(b.label)));
+}
+
+
+export async function updateEntry(id, patch) {
+  const entries = await getEntries();
+  let found = false;
+  const updated = entries.map((entry) => {
+    if (entry.id !== id) return entry;
+    found = true;
+    return normalizeEntry({ ...entry, ...patch, id: entry.id, secret: entry.secret });
+  });
+  if (!found) {
+    throw new Error('没有找到要更新的 TOTP 条目');
+  }
+  return saveEntries(updated.sort((a, b) => a.label.localeCompare(b.label)));
+}
+
+export async function addEntryDomain(id, urlOrHost) {
+  const entry = (await getEntries()).find((item) => item.id === id);
+  if (!entry) {
+    throw new Error('没有找到要绑定的 TOTP 条目');
+  }
+  const domain = normalizeHost(urlOrHost);
+  const domains = [...(entry.domains || [])];
+  if (!domains.includes(domain)) domains.push(domain);
+  return updateEntry(id, { domains });
 }
 
 export async function deleteEntry(id) {
