@@ -12,3 +12,6 @@ coverage/
 
 # Local OMX runtime state
 .omx/
+
+# Agent-generated plans
+docs/superpowers/
