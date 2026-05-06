@@ -10,6 +10,7 @@ let currentTab = null;
 let currentHost = '';
 let currentEntries = [];
 let fallbackMode = false;
+let searchQuery = '';
 
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
@@ -39,11 +40,22 @@ async function bindAndFill(entry, code) {
     await addEntryDomain(entry.id, currentHost);
   }
   await fillCode(code);
-  if (currentHost) setStatus(`已绑定 ${currentHost} 并填充`);
+  if (currentHost) setStatus(`已绑定 ${currentHost}，以后会自动匹配`);
 }
 
 function renderEmpty(message, hint = '可以在“导入/管理”里导入 Aegis JSON 或 Google Authenticator 迁移二维码内容。') {
-  entriesEl.innerHTML = `<div class="card"><p>${message}</p><p class="muted">${hint}</p></div>`;
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const messageEl = document.createElement('p');
+  messageEl.textContent = message;
+
+  const hintEl = document.createElement('p');
+  hintEl.className = 'muted';
+  hintEl.textContent = hint;
+
+  card.append(messageEl, hintEl);
+  entriesEl.replaceChildren(card);
 }
 
 async function codeFor(entry) {
@@ -58,48 +70,104 @@ async function codeFor(entry) {
   return codeCache.get(key);
 }
 
+function entryMatchesQuery(entry, query) {
+  if (!query) return true;
+  return [entry.issuer, entry.account, entry.label, ...(entry.domains || [])]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .includes(query.toLowerCase());
+}
+
+function visibleEntries() {
+  return currentEntries.filter((entry) => entryMatchesQuery(entry, searchQuery));
+}
+
+function renderFallbackControls() {
+  const controls = document.createElement('section');
+  controls.className = 'card stack fallback-search-controls';
+
+  const intro = document.createElement('p');
+  intro.textContent = '当前网站还没有自动匹配，先搜索正确条目，再一键绑定并填充。';
+
+  const input = document.createElement('input');
+  input.className = 'fallback-search-input';
+  input.type = 'search';
+  input.placeholder = '搜索 issuer / account / domain';
+  input.value = searchQuery;
+  input.addEventListener('input', (event) => {
+    searchQuery = event.target.value.trim();
+    renderEntries().catch((error) => setStatus(error.message, true));
+  });
+
+  const hint = document.createElement('p');
+  hint.className = 'muted';
+  hint.textContent = '搜索 issuer / account / domain';
+
+  controls.append(intro, input, hint);
+  return controls;
+}
+
 async function renderEntries() {
-  if (!currentEntries.length) {
+  const entries = visibleEntries();
+  if (!entries.length) {
+    if (fallbackMode) {
+      const children = [renderFallbackControls()];
+      const empty = document.createElement('div');
+      empty.className = 'card';
+      const message = document.createElement('p');
+      message.className = 'muted';
+      message.textContent = '没有找到匹配条目';
+      empty.append(message);
+      children.push(empty);
+      entriesEl.replaceChildren(...children);
+      return;
+    }
     renderEmpty('还没有可用的 2FA 条目。');
     return;
   }
 
-  const cards = await Promise.all(currentEntries.map(async (entry) => {
+  const cards = await Promise.all(entries.map(async (entry) => {
     const code = await codeFor(entry);
     const remaining = getTimeRemaining({ period: entry.period });
     return { entry, code, remaining };
   }));
 
-  entriesEl.replaceChildren(...cards.map(({ entry, code, remaining }) => {
-    const card = document.createElement('section');
-    card.className = 'card stack';
-    card.innerHTML = `
-      <div>
-        <div class="entry-title"></div>
-        <div class="entry-subtitle"></div>
-      </div>
-      <div class="row">
-        <div class="code"></div>
-        <div class="muted countdown"></div>
-      </div>
-      <div class="small-actions">
-        <button class="primary fill"></button>
-        <button class="copy">复制</button>
-      </div>
-    `;
-    card.querySelector('.entry-title').textContent = entry.issuer || entry.label;
-    card.querySelector('.entry-subtitle').textContent = entry.account || entry.label;
-    card.querySelector('.code').textContent = code;
-    card.querySelector('.countdown').textContent = `${remaining}秒`;
-    card.querySelector('.copy').addEventListener('click', () => copyCode(code).catch((error) => setStatus(error.message, true)));
-    const fillButton = card.querySelector('.fill');
-    fillButton.textContent = fallbackMode ? `绑定 ${currentHost || '当前网站'} 并填充` : '填充当前网站';
-    fillButton.addEventListener('click', () => {
-      const action = fallbackMode ? bindAndFill(entry, code) : fillCode(code);
-      action.catch((error) => setStatus(error.message, true));
-    });
-    return card;
-  }));
+  entriesEl.replaceChildren(
+    ...[
+      ...(fallbackMode ? [renderFallbackControls()] : []),
+      ...cards.map(({ entry, code, remaining }) => {
+        const card = document.createElement('section');
+        card.className = 'card stack entry-card';
+        card.innerHTML = `
+          <div>
+            <div class="entry-title"></div>
+            <div class="entry-subtitle"></div>
+          </div>
+          <div class="row">
+            <div class="code"></div>
+            <div class="muted countdown"></div>
+          </div>
+          <div class="small-actions">
+            <button class="primary fill"></button>
+            <button class="copy">复制</button>
+          </div>
+        `;
+        card.querySelector('.entry-title').textContent = entry.issuer || entry.label;
+        card.querySelector('.entry-subtitle').textContent = entry.account || entry.label;
+        card.querySelector('.code').textContent = code;
+        card.querySelector('.countdown').textContent = `${remaining}秒`;
+        card.querySelector('.copy').addEventListener('click', () => copyCode(code).catch((error) => setStatus(error.message, true)));
+        const fillButton = card.querySelector('.fill');
+        fillButton.textContent = fallbackMode ? `绑定 ${currentHost || '当前网站'} 并填充` : '填充当前网站';
+        fillButton.addEventListener('click', () => {
+          const action = fallbackMode ? bindAndFill(entry, code) : fillCode(code);
+          action.catch((error) => setStatus(error.message, true));
+        });
+        return card;
+      }),
+    ],
+  );
 }
 
 async function init() {
@@ -120,8 +188,9 @@ async function init() {
   const matches = currentHost ? findEntriesForHost(entries, currentHost) : [];
   fallbackMode = currentHost && matches.length === 0;
   currentEntries = fallbackMode ? entries : matches;
+  searchQuery = '';
   if (fallbackMode) {
-    setStatus('当前网站没有自动匹配；选择正确条目后会保存域名绑定。');
+    setStatus('当前网站没有自动匹配；搜索并选择正确条目后会保存域名绑定。');
   }
   await renderEntries();
   setInterval(renderEntries, 1000);
