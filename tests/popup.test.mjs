@@ -67,7 +67,7 @@ async function flush() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-async function setupPopup(entries, { url = 'https://vault-nowhere.test/login' } = {}) {
+async function setupPopup(entries, { url = 'https://vault-nowhere.test/login', sendMessageResult = { ok: true, mode: 'single' } } = {}) {
   let storedEntries = structuredClone(entries);
   const sentMessages = [];
   const injectedScripts = [];
@@ -105,7 +105,7 @@ async function setupPopup(entries, { url = 'https://vault-nowhere.test/login' } 
       },
       async sendMessage(tabId, message) {
         sentMessages.push({ tabId, message });
-        return { ok: true, mode: 'single' };
+        return sendMessageResult;
       },
     },
     scripting: {
@@ -172,6 +172,43 @@ const baseEntries = [
     label: 'Contoso: ops-team',
   },
 ];
+
+test('popup empty state explains how to import entries when storage is empty', async () => {
+  const { elements } = await setupPopup([]);
+
+  assert.match(elements['#entries'].children[0].children[0].textContent, /还没有导入 2FA 条目/);
+  assert.match(elements['#entries'].children[0].children[1].textContent, /点击上方“导入\/管理”/);
+
+  cleanupGlobals();
+});
+
+test('popup shows actionable fill error copy when the page rejects autofill', async () => {
+  const { elements } = await setupPopup([baseEntries[0]], { sendMessageResult: { ok: false, error: '当前页面没有找到验证码输入框' } });
+  const fillButton = elements['#entries'].children
+    .filter((child) => String(child.className).includes('entry-card'))[0]
+    .querySelector('.fill');
+
+  await fillButton.listeners.click();
+  await flush();
+
+  assert.match(elements['#status'].textContent, /没有找到验证码输入框/);
+  assert.match(elements['#status'].textContent, /你仍然可以先复制验证码再手动粘贴/);
+
+  cleanupGlobals();
+});
+
+test('single matched entry emphasizes the primary fill action', async () => {
+  const { elements } = await setupPopup([baseEntries[0]], { url: 'https://signin.acme.test/login' });
+  const entryCards = elements['#entries'].children.filter((child) => String(child.className).includes('entry-card'));
+  const fillButton = entryCards[0].querySelector('.fill');
+  const copyButton = entryCards[0].querySelector('.copy');
+
+  assert.equal(entryCards.length, 1);
+  assert.equal(fillButton.textContent, '立即填充当前网站');
+  assert.equal(copyButton.textContent, '复制备用');
+
+  cleanupGlobals();
+});
 
 test('unmatched popup shows search controls and the default recommended list', async () => {
   const { elements } = await setupPopup(baseEntries);

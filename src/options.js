@@ -4,6 +4,7 @@ import { importAnyText } from './core/importers.js';
 const statusEl = document.querySelector('#status');
 const entriesEl = document.querySelector('#entries');
 const searchEl = document.querySelector('#search');
+let pendingImportText = '';
 
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
@@ -11,10 +12,12 @@ function setStatus(text, isError = false) {
 }
 
 async function importText(text) {
+  pendingImportText = text;
   setStatus('正在导入/解密，请稍候...');
   const imported = await importAnyText(text, { password: document.querySelector('#aegisPassword').value });
   if (!imported.length) throw new Error('没有找到可导入的 TOTP 条目');
   await addEntries(imported);
+  pendingImportText = '';
   setStatus(`已导入/更新 ${imported.length} 个条目`);
   await renderEntries();
 }
@@ -105,7 +108,8 @@ async function renderEntries() {
 
 document.querySelector('#importButton').addEventListener('click', async () => {
   try {
-    await importText(document.querySelector('#importText').value);
+    const text = pendingImportText || document.querySelector('#importText').value;
+    await importText(text);
   } catch (error) {
     setStatus(error.message, true);
   }

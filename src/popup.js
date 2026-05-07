@@ -17,6 +17,10 @@ function setStatus(text, isError = false) {
   statusEl.classList.toggle('error', isError);
 }
 
+function fillErrorMessage(message = '填充失败') {
+  return `${message}；你仍然可以先复制验证码再手动粘贴。`;
+}
+
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
@@ -28,10 +32,10 @@ async function copyCode(code) {
 }
 
 async function fillCode(code) {
-  if (!currentTab?.id) throw new Error('无法定位当前标签页');
+  if (!currentTab?.id) throw new Error(fillErrorMessage('无法定位当前标签页'));
   await chrome.scripting.executeScript({ target: { tabId: currentTab.id }, files: ['src/content/autofill.js'] });
   const response = await chrome.tabs.sendMessage(currentTab.id, { type: 'FILL_TOTP_CODE', code });
-  if (!response?.ok) throw new Error(response?.error || '填充失败');
+  if (!response?.ok) throw new Error(fillErrorMessage(response?.error || '填充失败'));
   setStatus(response.mode === 'split' ? '已填充到多格验证码输入框' : '已填充到当前页面');
 }
 
@@ -43,7 +47,7 @@ async function bindAndFill(entry, code) {
   if (currentHost) setStatus(`已绑定 ${currentHost}，以后会自动匹配`);
 }
 
-function renderEmpty(message, hint = '可以在“导入/管理”里导入 Aegis JSON 或 Google Authenticator 迁移二维码内容。') {
+function renderEmpty(message, hint = '点击上方“导入/管理”导入 Aegis JSON、迁移二维码或手动粘贴 otpauth 内容。') {
   const card = document.createElement('div');
   card.className = 'card';
 
@@ -157,13 +161,19 @@ async function renderEntries() {
         card.querySelector('.entry-subtitle').textContent = entry.account || entry.label;
         card.querySelector('.code').textContent = code;
         card.querySelector('.countdown').textContent = `${remaining}秒`;
-        card.querySelector('.copy').addEventListener('click', () => copyCode(code).catch((error) => setStatus(error.message, true)));
         const fillButton = card.querySelector('.fill');
-        fillButton.textContent = fallbackMode ? `绑定 ${currentHost || '当前网站'} 并填充` : '填充当前网站';
+        fillButton.textContent = fallbackMode
+          ? `绑定 ${currentHost || '当前网站'} 并填充`
+          : currentEntries.length === 1
+            ? '立即填充当前网站'
+            : '填充当前网站';
         fillButton.addEventListener('click', () => {
           const action = fallbackMode ? bindAndFill(entry, code) : fillCode(code);
           action.catch((error) => setStatus(error.message, true));
         });
+        const copyButton = card.querySelector('.copy');
+        copyButton.textContent = currentEntries.length === 1 && !fallbackMode ? '复制备用' : '复制';
+        copyButton.addEventListener('click', () => copyCode(code).catch((error) => setStatus(error.message, true)));
         return card;
       }),
     ],
