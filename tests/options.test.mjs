@@ -66,9 +66,9 @@ async function encryptedAegisFixture(password) {
 }
 
 function fakeElement(initial = {}) {
-  return {
+  const element = {
     textContent: '',
-    innerHTML: '',
+    _innerHTML: '',
     value: '',
     files: [],
     children: [],
@@ -84,8 +84,42 @@ function fakeElement(initial = {}) {
     replaceChildren(...children) {
       this.children = children;
     },
+    querySelector(selector) {
+      const matches = (candidate) => {
+        if (selector.startsWith('#')) return candidate.id === selector.slice(1);
+        if (selector.startsWith('.')) return String(candidate.className || '').split(/\s+/).includes(selector.slice(1));
+        return String(candidate.tagName || '').toLowerCase() === selector.toLowerCase();
+      };
+      const queue = [...this.children];
+      while (queue.length) {
+        const node = queue.shift();
+        if (matches(node)) return node;
+        queue.push(...(node.children || []));
+      }
+      return null;
+    },
     ...initial,
   };
+
+  Object.defineProperty(element, 'innerHTML', {
+    get() {
+      return this._innerHTML;
+    },
+    set(value) {
+      this._innerHTML = value;
+      this.children = [];
+      for (const match of String(value).matchAll(/class="([^"]+)"/g)) {
+        const beforeClass = String(value).slice(0, match.index);
+        const tagMatch = beforeClass.match(/<([a-z0-9-]+)[^<]*$/i);
+        this.children.push(fakeElement({
+          tagName: (tagMatch?.[1] || 'div').toUpperCase(),
+          className: match[1],
+        }));
+      }
+    },
+  });
+
+  return element;
 }
 
 test('options page can retry encrypted file import after entering password', async () => {
@@ -95,6 +129,7 @@ test('options page can retry encrypted file import after entering password', asy
   const elements = {
     '#status': fakeElement(),
     '#entries': fakeElement(),
+    '#entryDetail': fakeElement(),
     '#search': fakeElement(),
     '#importButton': fakeElement(),
     '#fileImport': fakeElement(),
@@ -163,11 +198,20 @@ test('options page exposes a user-friendly security status panel', async () => {
   assert.match(html, /便利模式/);
 });
 
+test('options page provides separate entry list and detail panel regions', async () => {
+  const html = await readFile('/Users/heqifeng/VibeCoding/totp-autofill-extension/src/options.html', 'utf8');
+
+  assert.match(html, /entry-workspace/);
+  assert.match(html, /id="entries"/);
+  assert.match(html, /id="entryDetail"/);
+});
+
 test('options page previews imported text before writing to local storage', async () => {
   const saved = [];
   const elements = {
     '#status': fakeElement(),
     '#entries': fakeElement(),
+    '#entryDetail': fakeElement(),
     '#search': fakeElement(),
     '#importButton': fakeElement(),
     '#fileImport': fakeElement(),
@@ -220,6 +264,80 @@ test('options page previews imported text before writing to local storage', asyn
 
   assert.equal(saved.at(-1)[0].issuer, 'GitHub');
   assert.match(elements['#status'].textContent, /已导入\/更新 1 个条目/);
+
+  delete globalThis.document;
+  delete globalThis.chrome;
+  delete globalThis.confirm;
+});
+
+test('options page renders entry summaries separately from the selected entry editor', async () => {
+  const entries = [
+    {
+      id: 'otp_1',
+      issuer: 'GitHub',
+      account: 'alice@example.com',
+      secret: 'JBSWY3DPEHPK3PXP',
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      domains: ['github.com'],
+      label: 'GitHub: alice@example.com',
+    },
+    {
+      id: 'otp_2',
+      issuer: 'Cloudflare',
+      account: 'ops@example.com',
+      secret: 'JBSWY3DPEHPK3PXP',
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      domains: ['cloudflare.com'],
+      label: 'Cloudflare: ops@example.com',
+    },
+  ];
+  const elements = {
+    '#status': fakeElement(),
+    '#entries': fakeElement(),
+    '#entryDetail': fakeElement(),
+    '#search': fakeElement(),
+    '#importButton': fakeElement(),
+    '#fileImport': fakeElement(),
+    '#qrImport': fakeElement(),
+    '#clearAll': fakeElement(),
+    '#importText': fakeElement(),
+    '#aegisPassword': fakeElement(),
+    '#importPreview': fakeElement(),
+    '#confirmImport': fakeElement(),
+  };
+
+  globalThis.document = {
+    querySelector(selector) {
+      return elements[selector];
+    },
+    createElement(tagName) {
+      return fakeElement({ tagName: tagName.toUpperCase() });
+    },
+  };
+
+  globalThis.chrome = {
+    storage: {
+      local: {
+        async get(defaults) {
+          return { totpEntries: entries.length ? entries : defaults.totpEntries };
+        },
+        async set() {},
+      },
+    },
+  };
+  globalThis.confirm = () => true;
+
+  const moduleUrl = `${pathToFileURL('/Users/heqifeng/VibeCoding/totp-autofill-extension/src/options.js').href}?test=${Date.now()}_${Math.random()}`;
+  await import(moduleUrl);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(elements['#entries'].children.filter((child) => String(child.className).includes('entry-list-item')).length, 2);
+  assert.equal(elements['#entryDetail'].children.filter((child) => String(child.className).includes('entry-editor')).length, 1);
+  assert.equal(elements['#entryDetail'].querySelector('.edit-issuer').value, 'GitHub');
 
   delete globalThis.document;
   delete globalThis.chrome;

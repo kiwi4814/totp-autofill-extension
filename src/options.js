@@ -3,11 +3,13 @@ import { importAnyText } from './core/importers.js';
 
 const statusEl = document.querySelector('#status');
 const entriesEl = document.querySelector('#entries');
+const entryDetailEl = document.querySelector('#entryDetail') || entriesEl;
 const searchEl = document.querySelector('#search');
 const importPreviewEl = document.querySelector('#importPreview');
 const confirmImportEl = document.querySelector('#confirmImport');
 let pendingImportText = '';
 let pendingImportEntries = [];
+let selectedEntryId = '';
 
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
@@ -98,11 +100,11 @@ function domainsText(entry) {
   return (entry.domains || []).join(', ');
 }
 
-async function saveCard(card, entry) {
-  const issuer = card.querySelector('.edit-issuer').value;
-  const account = card.querySelector('.edit-account').value;
-  const note = card.querySelector('.edit-note').value;
-  const domains = card.querySelector('.edit-domains').value
+async function saveEntryFromDetail(detail, entry) {
+  const issuer = detail.querySelector('.edit-issuer').value;
+  const account = detail.querySelector('.edit-account').value;
+  const note = detail.querySelector('.edit-note').value;
+  const domains = detail.querySelector('.edit-domains').value
     .split(/[\n,，]/)
     .map((domain) => domain.trim())
     .filter(Boolean);
@@ -111,45 +113,80 @@ async function saveCard(card, entry) {
   await renderEntries();
 }
 
+function renderEntrySummary(entry) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `entry-list-item${entry.id === selectedEntryId ? ' active' : ''}`;
+  button.innerHTML = `
+    <span class="entry-title"></span>
+    <span class="entry-subtitle"></span>
+  `;
+  button.querySelector('.entry-title').textContent = entry.issuer || entry.label;
+  button.querySelector('.entry-subtitle').textContent = [
+    entry.account || entry.label,
+    domainsText(entry) || '未绑定匹配域名',
+  ].filter(Boolean).join(' · ');
+  button.addEventListener('click', () => {
+    selectedEntryId = entry.id;
+    renderEntries().catch((error) => setStatus(error.message, true));
+  });
+  return button;
+}
+
+function renderEntryDetail(entry) {
+  const card = document.createElement('section');
+  card.className = 'card stack entry-editor';
+  card.innerHTML = `
+    <div class="row">
+      <div>
+        <div class="entry-title"></div>
+        <div class="entry-subtitle"></div>
+      </div>
+      <button class="danger delete">删除</button>
+    </div>
+    <label>服务商 <input class="edit-issuer" type="text"></label>
+    <label>名称 <input class="edit-account" type="text"></label>
+    <label>备注 <input class="edit-note" type="text"></label>
+    <label>匹配域名 <textarea class="edit-domains" placeholder="github.com, login.example.com"></textarea></label>
+    <div class="small-actions">
+      <button class="primary save">保存信息</button>
+    </div>
+  `;
+  card.querySelector('.entry-title').textContent = entry.label;
+  card.querySelector('.entry-subtitle').textContent = `哈希函数: ${entry.algorithm} · 位数: ${entry.digits} · 时间间隔: ${entry.period}秒`;
+  card.querySelector('.edit-issuer').value = entry.issuer || '';
+  card.querySelector('.edit-account').value = entry.account || '';
+  card.querySelector('.edit-note').value = entry.note || '';
+  card.querySelector('.edit-domains').value = domainsText(entry);
+  card.querySelector('.save').addEventListener('click', () => saveEntryFromDetail(card, entry).catch((error) => setStatus(error.message, true)));
+  card.querySelector('.delete').addEventListener('click', async () => {
+    await deleteEntry(entry.id);
+    selectedEntryId = '';
+    setStatus(`已删除 ${entry.label}`);
+    await renderEntries();
+  });
+  return card;
+}
+
 async function renderEntries() {
   const entries = (await getEntries()).filter((entry) => entryMatches(entry, searchEl.value.trim()));
   if (!entries.length) {
-    entriesEl.innerHTML = '<p class="muted">没有条目。</p>';
+    selectedEntryId = '';
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = searchEl.value.trim() ? '没有找到匹配条目。' : '没有条目。';
+    entriesEl.replaceChildren(empty);
+    const hint = document.createElement('section');
+    hint.className = 'card muted';
+    hint.textContent = '选择左侧条目后，在这里编辑服务商、名称、备注和匹配域名。';
+    entryDetailEl.replaceChildren(hint);
     return;
   }
-  entriesEl.replaceChildren(...entries.map((entry) => {
-    const card = document.createElement('section');
-    card.className = 'card stack entry-editor';
-    card.innerHTML = `
-      <div class="row">
-        <div>
-          <div class="entry-title"></div>
-          <div class="entry-subtitle"></div>
-        </div>
-        <button class="danger delete">删除</button>
-      </div>
-      <label>服务商 <input class="edit-issuer" type="text"></label>
-      <label>名称 <input class="edit-account" type="text"></label>
-      <label>备注 <input class="edit-note" type="text"></label>
-      <label>匹配域名 <textarea class="edit-domains" placeholder="github.com, login.example.com"></textarea></label>
-      <div class="small-actions">
-        <button class="primary save">保存信息</button>
-      </div>
-    `;
-    card.querySelector('.entry-title').textContent = entry.label;
-    card.querySelector('.entry-subtitle').textContent = `哈希函数: ${entry.algorithm} · 位数: ${entry.digits} · 时间间隔: ${entry.period}秒`;
-    card.querySelector('.edit-issuer').value = entry.issuer || '';
-    card.querySelector('.edit-account').value = entry.account || '';
-    card.querySelector('.edit-note').value = entry.note || '';
-    card.querySelector('.edit-domains').value = domainsText(entry);
-    card.querySelector('.save').addEventListener('click', () => saveCard(card, entry).catch((error) => setStatus(error.message, true)));
-    card.querySelector('.delete').addEventListener('click', async () => {
-      await deleteEntry(entry.id);
-      setStatus(`已删除 ${entry.label}`);
-      await renderEntries();
-    });
-    return card;
-  }));
+  if (!entries.some((entry) => entry.id === selectedEntryId)) {
+    selectedEntryId = entries[0].id;
+  }
+  entriesEl.replaceChildren(...entries.map((entry) => renderEntrySummary(entry)));
+  entryDetailEl.replaceChildren(renderEntryDetail(entries.find((entry) => entry.id === selectedEntryId)));
 }
 
 document.querySelector('#importButton').addEventListener('click', async () => {
@@ -188,6 +225,7 @@ document.querySelector('#clearAll').addEventListener('click', async () => {
   const ok = confirm('确认清空本地保存的所有 TOTP 条目？');
   if (!ok) return;
   await clearEntries();
+  selectedEntryId = '';
   setStatus('已清空');
   await renderEntries();
 });

@@ -69,7 +69,10 @@
           <button id="clearAll" class="danger">清空全部</button>
         </div>
         <input id="search" type="search" placeholder="搜索 服务商 / 名称 / 匹配域名">
-        <div id="entries" class="list editor-list"></div>
+        <div class="entry-workspace">
+          <div id="entries" class="list entry-list" aria-label="条目列表"></div>
+          <div id="entryDetail" class="entry-detail" aria-label="条目详情"></div>
+        </div>
         <div class="danger-zone">
           删除单条或清空全部属于危险操作；后续会迁入独立危险区域并增加更明确的确认流程。
         </div>

@@ -164,6 +164,35 @@ p { margin: 8px 0; }
   font-weight: 700;
 }
 
+.entry-workspace {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.72fr) minmax(280px, 1.28fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.entry-list {
+  align-content: start;
+}
+
+.entry-list-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card), var(--primary-soft) 10%);
+}
+
+.entry-list-item.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-soft), transparent 12%);
+}
+
+.entry-detail {
+  min-width: 0;
+}
+
 button, .button-like {
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -248,7 +277,8 @@ textarea { min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, 
 
 @media (max-width: 760px) {
   .status-grid,
-  .options-grid {
+  .options-grid,
+  .entry-workspace {
     grid-template-columns: 1fr;
   }
 }
