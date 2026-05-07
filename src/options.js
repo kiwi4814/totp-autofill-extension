@@ -4,20 +4,66 @@ import { importAnyText } from './core/importers.js';
 const statusEl = document.querySelector('#status');
 const entriesEl = document.querySelector('#entries');
 const searchEl = document.querySelector('#search');
+const importPreviewEl = document.querySelector('#importPreview');
+const confirmImportEl = document.querySelector('#confirmImport');
 let pendingImportText = '';
+let pendingImportEntries = [];
 
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
   statusEl.classList.toggle('error', isError);
 }
 
-async function importText(text) {
+function setConfirmImportEnabled(enabled) {
+  if (confirmImportEl) confirmImportEl.disabled = !enabled;
+}
+
+function clearImportPreview() {
+  pendingImportEntries = [];
+  setConfirmImportEnabled(false);
+  if (importPreviewEl) {
+    importPreviewEl.textContent = '选择文件或粘贴内容后，先预览将新增或更新的条目。';
+  }
+}
+
+async function renderImportPreview(imported) {
+  const existing = await getEntries();
+  const existingIds = new Set(existing.map((entry) => entry.id));
+  const newCount = imported.filter((entry) => !existingIds.has(entry.id)).length;
+  const updateCount = imported.length - newCount;
+  const labels = imported
+    .slice(0, 5)
+    .map((entry) => `${existingIds.has(entry.id) ? '更新' : '新增'}：${entry.issuer || entry.account || entry.label}`)
+    .join('；');
+  const more = imported.length > 5 ? `；另有 ${imported.length - 5} 个条目` : '';
+  if (importPreviewEl) {
+    importPreviewEl.textContent = `准备导入 ${imported.length} 个条目：新增 ${newCount} 个，更新 ${updateCount} 个。${labels}${more}`;
+  }
+}
+
+async function previewImportText(text) {
   pendingImportText = text;
-  setStatus('正在导入/解密，请稍候...');
+  pendingImportEntries = [];
+  setConfirmImportEnabled(false);
+  if (importPreviewEl) importPreviewEl.textContent = '正在读取/解密，请稍候...';
+  setStatus('正在读取/解密，请稍候...');
   const imported = await importAnyText(text, { password: document.querySelector('#aegisPassword').value });
   if (!imported.length) throw new Error('没有找到可导入的 TOTP 条目');
+  pendingImportEntries = imported;
+  await renderImportPreview(imported);
+  setConfirmImportEnabled(true);
+  setStatus(`已预览 ${imported.length} 个条目，请确认后写入本地存储`);
+}
+
+async function confirmImport() {
+  if (!pendingImportEntries.length) {
+    setStatus('没有待写入的导入预览', true);
+    return;
+  }
+  const imported = pendingImportEntries;
   await addEntries(imported);
   pendingImportText = '';
+  clearImportPreview();
   setStatus(`已导入/更新 ${imported.length} 个条目`);
   await renderEntries();
 }
@@ -109,7 +155,7 @@ async function renderEntries() {
 document.querySelector('#importButton').addEventListener('click', async () => {
   try {
     const text = pendingImportText || document.querySelector('#importText').value;
-    await importText(text);
+    await previewImportText(text);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -119,7 +165,7 @@ document.querySelector('#fileImport').addEventListener('change', async (event) =
   try {
     const file = event.target.files?.[0];
     if (!file) return;
-    await importText(await readFile(file));
+    await previewImportText(await readFile(file));
     event.target.value = '';
   } catch (error) {
     setStatus(error.message, true);
@@ -131,7 +177,7 @@ document.querySelector('#qrImport').addEventListener('change', async (event) => 
     const file = event.target.files?.[0];
     if (!file) return;
     const value = await decodeQrImage(file);
-    await importText(value);
+    await previewImportText(value);
     event.target.value = '';
   } catch (error) {
     setStatus(error.message, true);
@@ -146,5 +192,7 @@ document.querySelector('#clearAll').addEventListener('click', async () => {
   await renderEntries();
 });
 
+confirmImportEl?.addEventListener('click', () => confirmImport().catch((error) => setStatus(error.message, true)));
 searchEl.addEventListener('input', renderEntries);
+clearImportPreview();
 renderEntries().catch((error) => setStatus(error.message, true));

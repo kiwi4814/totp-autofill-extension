@@ -53,6 +53,8 @@ function makeElement(initial = {}) {
       if (value.includes('entry-subtitle')) this.children.push(makeElement({ className: 'entry-subtitle' }));
       if (value.includes('code')) this.children.push(makeElement({ className: 'code' }));
       if (value.includes('countdown')) this.children.push(makeElement({ className: 'countdown muted' }));
+      if (value.includes('countdown-bar-fill')) this.children.push(makeElement({ className: 'countdown-bar-fill' }));
+      if (value.includes('countdown-hint')) this.children.push(makeElement({ className: 'countdown-hint muted' }));
       if (value.includes('primary fill')) this.children.push(makeElement({ tagName: 'BUTTON', className: 'primary fill' }));
       if (value.includes('button class="copy"')) this.children.push(makeElement({ tagName: 'BUTTON', className: 'copy' }));
     },
@@ -67,7 +69,7 @@ async function flush() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-async function setupPopup(entries, { url = 'https://vault-nowhere.test/login', sendMessageResult = { ok: true, mode: 'single' } } = {}) {
+async function setupPopup(entries, { url = 'https://vault-nowhere.test/login', sendMessageResult = { ok: true, mode: 'single' }, now = 1714953600000 } = {}) {
   let storedEntries = structuredClone(entries);
   const sentMessages = [];
   const injectedScripts = [];
@@ -127,7 +129,7 @@ async function setupPopup(entries, { url = 'https://vault-nowhere.test/login', s
     },
   });
   globalThis.setInterval = () => 1;
-  globalThis.Date.now = () => 1714953600000;
+  globalThis.Date.now = () => now;
 
   const moduleUrl = `${pathToFileURL('/Users/heqifeng/VibeCoding/totp-autofill-extension/src/popup.js').href}?test=${Date.now()}_${Math.random()}`;
   await import(moduleUrl);
@@ -215,8 +217,8 @@ test('unmatched popup shows search controls and the default recommended list', a
 
   assert.match(elements['#status'].textContent, /没有自动匹配/);
   assert.equal(elements['#host'].textContent, 'vault-nowhere.test');
-  assert.ok(elements['#entries'].querySelector('.fallback-search-input'));
-  assert.equal(elements['#entries'].querySelector('.fallback-search-input').placeholder, '搜索 issuer / account / domain');
+  assert.ok(elements['#entries'].querySelector('.popup-search-input'));
+  assert.equal(elements['#entries'].querySelector('.popup-search-input').placeholder, '搜索服务商 / 名称 / 匹配域名');
   assert.equal(elements['#entries'].children.filter((child) => String(child.className).includes('entry-card')).length, 2);
 
   cleanupGlobals();
@@ -224,7 +226,7 @@ test('unmatched popup shows search controls and the default recommended list', a
 
 test('unmatched popup search filters by issuer, account, and domain', async () => {
   const { elements } = await setupPopup(baseEntries);
-  const searchInput = elements['#entries'].querySelector('.fallback-search-input');
+  const searchInput = elements['#entries'].querySelector('.popup-search-input');
 
   searchInput.value = 'contoso';
   await searchInput.listeners.input({ target: searchInput });
@@ -255,6 +257,44 @@ test('unmatched popup search filters by issuer, account, and domain', async () =
       .map((child) => child.querySelector('.entry-title').textContent),
     ['Contoso'],
   );
+
+  cleanupGlobals();
+});
+
+test('multiple matched entries show a match summary and searchable list', async () => {
+  const entries = [
+    { ...baseEntries[0], domains: ['shared.test'] },
+    { ...baseEntries[1], domains: ['shared.test'] },
+  ];
+  const { elements } = await setupPopup(entries, { url: 'https://shared.test/login' });
+  const searchInput = elements['#entries'].querySelector('.popup-search-input');
+
+  assert.match(elements['#status'].textContent, /找到 2 个匹配条目/);
+  assert.equal(searchInput.placeholder, '搜索服务商 / 名称 / 匹配域名');
+
+  searchInput.value = 'contoso';
+  await searchInput.listeners.input({ target: searchInput });
+  await flush();
+
+  assert.deepEqual(
+    elements['#entries'].children
+      .filter((child) => String(child.className).includes('entry-card'))
+      .map((child) => child.querySelector('.entry-title').textContent),
+    ['Contoso'],
+  );
+
+  cleanupGlobals();
+});
+
+test('popup warns when the current code is about to refresh', async () => {
+  const { elements } = await setupPopup([baseEntries[0]], {
+    url: 'https://signin.acme.test/login',
+    now: 1714953625000,
+  });
+  const entryCard = elements['#entries'].children
+    .filter((child) => String(child.className).includes('entry-card'))[0];
+
+  assert.match(entryCard.querySelector('.countdown-hint').textContent, /验证码即将刷新/);
 
   cleanupGlobals();
 });

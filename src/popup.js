@@ -87,17 +87,19 @@ function visibleEntries() {
   return currentEntries.filter((entry) => entryMatchesQuery(entry, searchQuery));
 }
 
-function renderFallbackControls() {
+function renderSearchControls() {
   const controls = document.createElement('section');
-  controls.className = 'card stack fallback-search-controls';
+  controls.className = 'card stack popup-search-controls';
 
   const intro = document.createElement('p');
-  intro.textContent = '当前网站还没有自动匹配，先搜索正确条目，再一键绑定并填充。';
+  intro.textContent = fallbackMode
+    ? '当前网站还没有自动匹配，先搜索正确条目，再一键绑定并填充。'
+    : '当前网站匹配到多个条目，可搜索服务商、名称或匹配域名后再填充。';
 
   const input = document.createElement('input');
-  input.className = 'fallback-search-input';
+  input.className = 'popup-search-input';
   input.type = 'search';
-  input.placeholder = '搜索 issuer / account / domain';
+  input.placeholder = '搜索服务商 / 名称 / 匹配域名';
   input.value = searchQuery;
   input.addEventListener('input', (event) => {
     searchQuery = event.target.value.trim();
@@ -106,7 +108,9 @@ function renderFallbackControls() {
 
   const hint = document.createElement('p');
   hint.className = 'muted';
-  hint.textContent = '搜索 issuer / account / domain';
+  hint.textContent = fallbackMode
+    ? '绑定只保存域名，不保存当前页面路径。'
+    : '默认按当前网站匹配评分排序，最近要用的条目可以直接填充。';
 
   controls.append(intro, input, hint);
   return controls;
@@ -116,7 +120,7 @@ async function renderEntries() {
   const entries = visibleEntries();
   if (!entries.length) {
     if (fallbackMode) {
-      const children = [renderFallbackControls()];
+      const children = [renderSearchControls()];
       const empty = document.createElement('div');
       empty.className = 'card';
       const message = document.createElement('p');
@@ -139,7 +143,7 @@ async function renderEntries() {
 
   entriesEl.replaceChildren(
     ...[
-      ...(fallbackMode ? [renderFallbackControls()] : []),
+      ...(fallbackMode || currentEntries.length > 1 ? [renderSearchControls()] : []),
       ...cards.map(({ entry, code, remaining }) => {
         const card = document.createElement('section');
         card.className = 'card stack entry-card';
@@ -152,6 +156,10 @@ async function renderEntries() {
             <div class="code"></div>
             <div class="muted countdown"></div>
           </div>
+          <div class="countdown-track" aria-hidden="true">
+            <div class="countdown-bar-fill"></div>
+          </div>
+          <div class="countdown-hint muted"></div>
           <div class="small-actions">
             <button class="primary fill"></button>
             <button class="copy">复制</button>
@@ -161,6 +169,14 @@ async function renderEntries() {
         card.querySelector('.entry-subtitle').textContent = entry.account || entry.label;
         card.querySelector('.code').textContent = code;
         card.querySelector('.countdown').textContent = `${remaining}秒`;
+        const progress = card.querySelector('.countdown-bar-fill');
+        if (progress) progress.style = `width: ${Math.max(0, Math.min(100, (remaining / entry.period) * 100))}%`;
+        const countdownHint = card.querySelector('.countdown-hint');
+        if (countdownHint) {
+          countdownHint.textContent = remaining <= 7
+            ? '验证码即将刷新，建议稍等下一组再填充。'
+            : '如自动填充失败，可以复制验证码手动粘贴。';
+        }
         const fillButton = card.querySelector('.fill');
         fillButton.textContent = fallbackMode
           ? `绑定 ${currentHost || '当前网站'} 并填充`
@@ -201,6 +217,12 @@ async function init() {
   searchQuery = '';
   if (fallbackMode) {
     setStatus('当前网站没有自动匹配；搜索并选择正确条目后会保存域名绑定。');
+  } else if (matches.length === 1) {
+    setStatus('已匹配当前网站；可直接填充或复制备用。');
+  } else if (matches.length > 1) {
+    setStatus(`找到 ${matches.length} 个匹配条目；优先显示最可能的条目，也可以搜索。`);
+  } else if (!currentHost) {
+    setStatus('无法读取当前网站；可以在设置页管理条目，或复制验证码手动粘贴。');
   }
   await renderEntries();
   setInterval(renderEntries, 1000);

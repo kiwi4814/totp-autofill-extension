@@ -7,34 +7,74 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="options">
-  <main>
-    <header>
-      <h1>Local TOTP Autofill 设置</h1>
+  <main class="options-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">本地优先 · 无网络同步</p>
+        <h1>Local TOTP Autofill 设置</h1>
+      </div>
     </header>
 
-    <section class="card stack">
-      <h2>导入</h2>
-      <p class="warning">第一版按你的选择不设主密码，TOTP secret 会保存在 chrome.storage.local。只建议在你自己的电脑本地使用。</p>
-      <div class="small-actions">
-        <label class="button-like">导入 Aegis JSON 文件 <input id="fileImport" type="file" accept="application/json,.json" hidden></label>
-        <label class="button-like">识别 Google Authenticator 二维码图片 <input id="qrImport" type="file" accept="image/*" hidden></label>
+    <section class="card stack security-panel" aria-labelledby="securityTitle">
+      <div class="row">
+        <div>
+          <p class="eyebrow">当前安全状态</p>
+          <h2 id="securityTitle">安全状态</h2>
+        </div>
+        <span class="status-pill">便利模式</span>
       </div>
-      <input id="aegisPassword" type="password" autocomplete="off" placeholder="Aegis 加密备份密码（仅导入加密 JSON 时需要）">
-      <textarea id="importText" placeholder="也可以粘贴 Aegis JSON、otpauth://... 或 Google Authenticator 的 otpauth-migration://... 内容"></textarea>
-      <div class="small-actions">
-        <button id="importButton" class="primary">导入文本</button>
+      <div class="status-grid">
+        <div class="status-item">
+          <strong>不联网</strong>
+          <span>验证码只在本地生成，不上传、不同步。</span>
+        </div>
+        <div class="status-item">
+          <strong>无长期站点权限</strong>
+          <span>未声明长期站点权限，仅用户点击时处理当前网站。</span>
+        </div>
+        <div class="status-item warning-item">
+          <strong>验证码密钥：本地明文</strong>
+          <span>当前未启用主密码，只建议在自己的电脑使用。</span>
+        </div>
       </div>
-      <div id="status" class="status"></div>
     </section>
 
-    <section class="card stack">
-      <div class="row">
-        <h2>已保存条目</h2>
-        <button id="clearAll" class="danger">清空全部</button>
-      </div>
-      <input id="search" type="search" placeholder="搜索 服务商 / 名称 / 匹配域名">
-      <div id="entries" class="list"></div>
-    </section>
+    <div class="options-grid">
+      <section class="card stack import-panel">
+        <div>
+          <p class="eyebrow">导入向导入口</p>
+          <h2>导入</h2>
+        </div>
+        <p class="warning">当前版本还没有主密码，验证码密钥会保存在本地存储。导入加密 Aegis 备份时，密码只用于本地解密，不会保存。</p>
+        <div class="small-actions">
+          <label class="button-like">导入 Aegis JSON 文件 <input id="fileImport" type="file" accept="application/json,.json" hidden></label>
+          <label class="button-like">识别 Google Authenticator 二维码图片 <input id="qrImport" type="file" accept="image/*" hidden></label>
+        </div>
+        <input id="aegisPassword" type="password" autocomplete="off" placeholder="Aegis 加密备份密码（仅导入加密 JSON 时需要）">
+        <textarea id="importText" placeholder="也可以粘贴 Aegis JSON、otpauth://... 或 Google Authenticator 的 otpauth-migration://... 内容"></textarea>
+        <div class="small-actions">
+          <button id="importButton" class="primary">预览导入</button>
+          <button id="confirmImport" disabled>确认写入本地存储</button>
+        </div>
+        <div id="importPreview" class="import-preview muted">选择文件或粘贴内容后，先预览将新增或更新的条目。</div>
+        <div id="status" class="status"></div>
+      </section>
+
+      <section class="card stack entries-panel">
+        <div class="row">
+          <div>
+            <p class="eyebrow">条目管理</p>
+            <h2>已保存条目</h2>
+          </div>
+          <button id="clearAll" class="danger">清空全部</button>
+        </div>
+        <input id="search" type="search" placeholder="搜索 服务商 / 名称 / 匹配域名">
+        <div id="entries" class="list editor-list"></div>
+        <div class="danger-zone">
+          删除单条或清空全部属于危险操作；后续会迁入独立危险区域并增加更明确的确认流程。
+        </div>
+      </section>
+    </div>
   </main>
   <script type="module" src="options.js"></script>
 </body>
