@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local TOTP Autofill UI 友好化设计专题</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --ink: #162033;
+      --muted: #667085;
+      --line: #d9e1ee;
+      --blue: #315efb;
+      --blue-soft: #e8edff;
+      --green: #16865a;
+      --green-soft: #e8f7f0;
+      --orange: #b65c00;
+      --orange-soft: #fff3df;
+      --red: #c02626;
+      --red-soft: #fff0f0;
+      --shadow: 0 18px 50px rgb(23 32 51 / 10%);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: radial-gradient(circle at 18% 0%, #e8edff 0, transparent 32%), var(--bg); color: var(--ink); }
+    .page { max-width: 1240px; margin: 0 auto; padding: 40px 28px 56px; }
+    .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 24px; align-items: end; margin-bottom: 28px; }
+    .eyebrow { color: var(--blue); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; font-size: 12px; }
+    h1 { font-size: clamp(32px, 5vw, 58px); line-height: 0.96; letter-spacing: -0.055em; margin: 10px 0 14px; }
+    .lead { font-size: 18px; color: var(--muted); max-width: 700px; line-height: 1.7; margin: 0; }
+    .system-card, .panel, .phone, .browser { background: rgb(255 255 255 / 88%); border: 1px solid rgb(217 225 238 / 86%); border-radius: 28px; box-shadow: var(--shadow); }
+    .system-card { padding: 22px; }
+    .system-card h2 { margin: 0 0 14px; font-size: 17px; }
+    .tokens { display: grid; gap: 10px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .token { display: flex; gap: 10px; align-items: center; }
+    .dot { width: 14px; height: 14px; border-radius: 999px; background: var(--blue); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%); }
+    .grid { display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start; }
+    .phone { width: 360px; padding: 18px; border-radius: 34px; position: sticky; top: 24px; }
+    .chrome { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .title-block .label { color: var(--muted); font-size: 12px; }
+    .title-block .site { font-size: 20px; font-weight: 850; letter-spacing: -0.03em; }
+    .pill { border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 700; background: var(--green-soft); color: var(--green); }
+    .code-card { border-radius: 24px; padding: 18px; background: linear-gradient(180deg, #ffffff, #f8faff); border: 1px solid var(--line); }
+    .service { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .service strong { font-size: 18px; letter-spacing: -0.02em; }
+    .service span { color: var(--muted); font-size: 12px; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 42px; letter-spacing: 0.12em; font-weight: 900; margin: 18px 0 8px; }
+    .timer { height: 9px; background: #e4e9f4; border-radius: 999px; overflow: hidden; }
+    .timer i { display: block; width: 62%; height: 100%; background: linear-gradient(90deg, var(--blue), #78a0ff); border-radius: inherit; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .actions { display: grid; gap: 10px; margin-top: 14px; }
+    button { border: 0; border-radius: 16px; padding: 13px 14px; font-weight: 800; font: inherit; }
+    .primary { background: var(--blue); color: white; box-shadow: 0 10px 24px rgb(49 94 251 / 28%); }
+    .secondary { background: var(--blue-soft); color: #2448ca; }
+    .state-list { display: grid; gap: 10px; margin-top: 14px; }
+    .state { border: 1px solid var(--line); border-radius: 18px; padding: 12px; background: white; }
+    .state b { display: block; margin-bottom: 4px; }
+    .state p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .workspace { display: grid; gap: 24px; }
+    .panel { padding: 24px; }
+    .panel h2 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.04em; }
+    .panel > p { margin: 0 0 18px; color: var(--muted); line-height: 1.65; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .mini { border: 1px solid var(--line); border-radius: 20px; padding: 15px; background: #fff; min-height: 150px; }
+    .mini .tag { display: inline-flex; border-radius: 999px; padding: 5px 8px; font-size: 11px; font-weight: 800; margin-bottom: 12px; background: var(--blue-soft); color: var(--blue); }
+    .mini h3 { margin: 0 0 8px; font-size: 16px; }
+    .mini p, .mini li { color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .mini ul { padding-left: 18px; margin: 0; }
+    .browser { overflow: hidden; }
+    .browser-top { height: 52px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 18px; background: #fbfcff; }
+    .light { width: 10px; height: 10px; border-radius: 999px; background: #d0d8e8; }
+    .browser-body { display: grid; grid-template-columns: 290px 1fr; min-height: 430px; }
+    .sidebar { border-right: 1px solid var(--line); padding: 18px; background: #f8faff; }
+    .search { height: 42px; border-radius: 14px; background: white; border: 1px solid var(--line); color: var(--muted); display: flex; align-items: center; padding: 0 12px; font-size: 13px; }
+    .item { margin-top: 12px; padding: 12px; border-radius: 16px; background: white; border: 1px solid var(--line); }
+    .item.active { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+    .item b { display: block; font-size: 14px; }
+    .item span { color: var(--muted); font-size: 12px; }
+    .detail { padding: 22px; }
+    .notice { padding: 14px; border-radius: 18px; background: var(--orange-soft); color: var(--orange); font-weight: 700; margin-bottom: 16px; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .field { border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
+    .field span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .field b { font-size: 14px; }
+    .danger-zone { margin-top: 18px; padding: 14px; border-radius: 18px; background: var(--red-soft); color: var(--red); font-weight: 750; }
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; counter-reset: step; }
+    .step { border-radius: 20px; background: white; border: 1px solid var(--line); padding: 15px; position: relative; }
+    .step:before { counter-increment: step; content: counter(step); width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center; background: var(--blue); color: white; font-weight: 900; margin-bottom: 12px; }
+    .step b { display: block; margin-bottom: 6px; }
+    .step span { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    @media (max-width: 980px) { .hero, .grid, .browser-body { grid-template-columns: 1fr; } .phone { position: static; width: 100%; } .cards, .flow, .form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Claude Design · UI/UX 友好化专题</div>
+        <h1>把 2FA 操作变成“下一步很明确”的小工具</h1>
+        <p class="lead">设计系统假设：小尺寸 Popup 以当前网站和主操作为中心；设置页以“条目管理 + 导入安全感”为中心；所有异常状态都给出可继续完成 2FA 的兜底路径。</p>
+      </div>
+      <aside class="system-card">
+        <h2>设计系统声明</h2>
+        <div class="tokens">
+          <div class="token"><i class="dot"></i><span>主色：可信赖蓝，用于“填充 / 绑定 / 保存”等正向主动作。</span></div>
+          <div class="token"><i class="dot" style="background: var(--green)"></i><span>成功色：仅用于绑定完成、已导入、已复制等反馈。</span></div>
+          <div class="token"><i class="dot" style="background: var(--orange)"></i><span>提醒色：用于低剩余时间、便利模式风险提示。</span></div>
+          <div class="token"><i class="dot" style="background: var(--red)"></i><span>危险色：仅用于清空、删除、导出明文等不可逆动作。</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="grid">
+      <aside class="phone" aria-label="Popup redesign mockup">
+        <div class="chrome">
+          <div class="title-block">
+            <div class="label">当前网站</div>
+            <div class="site">github.com</div>
+          </div>
+          <span class="pill">已匹配</span>
+        </div>
+        <div class="code-card">
+          <div class="service">
+            <div><strong>GitHub</strong><br><span>heqifeng@example.com</span></div>
+            <span>6 位 · 30 秒</span>
+          </div>
+          <div class="code">384 921</div>
+          <div class="timer"><i></i></div>
+          <div class="hint">还剩 18 秒；少于 7 秒时建议等待刷新后再填充。</div>
+          <div class="actions">
+            <button class="primary">立即填充当前网站</button>
+            <button class="secondary">复制验证码备用</button>
+          </div>
+        </div>
+        <div class="state-list">
+          <div class="state"><b>无匹配时</b><p>首屏出现搜索框，按钮文案改为“绑定当前网站并填充”。</p></div>
+          <div class="state"><b>填充失败时</b><p>说明原因，保留复制入口，并引导手动粘贴或选择输入框。</p></div>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <section class="panel">
+          <h2>核心交互原则</h2>
+          <p>Popup 不展示“所有功能”，只回答用户打开扩展时最关心的问题：当前网站是谁、是否匹配、验证码是多少、下一步点哪里、失败后怎么继续。</p>
+          <div class="cards">
+            <article class="mini"><span class="tag">状态驱动</span><h3>一屏一主动作</h3><p>已匹配时主按钮是“立即填充”；未匹配时主按钮是“绑定并填充”；无条目时主按钮是“去导入”。</p></article>
+            <article class="mini"><span class="tag">用户友好</span><h3>错误变成下一步</h3><p>把“填充失败”改成“没有找到验证码输入框，可以复制后手动粘贴”。避免用户误以为验证码失效。</p></article>
+            <article class="mini"><span class="tag">安全清晰</span><h3>不制造假安全感</h3><p>设置页持续显示本地存储、无联网、无主密码/已启用主密码等状态，敏感操作需要明确确认。</p></article>
+          </div>
+        </section>
+
+        <section class="browser" aria-label="Options page redesign mockup">
+          <div class="browser-top"><i class="light"></i><i class="light"></i><i class="light"></i><strong style="margin-left: 10px">设置页：列表 + 详情面板</strong></div>
+          <div class="browser-body">
+            <aside class="sidebar">
+              <div class="search">搜索服务商 / 名称 / 匹配域名</div>
+              <div class="item active"><b>GitHub</b><span>heqifeng@example.com · github.com</span></div>
+              <div class="item"><b>Google</b><span>me@gmail.com · accounts.google.com</span></div>
+              <div class="item"><b>Cloudflare</b><span>work@example.com · cloudflare.com</span></div>
+            </aside>
+            <section class="detail">
+              <div class="notice">便利模式：验证码密钥保存在本地浏览器存储。仅建议在自己的电脑使用。</div>
+              <div class="form-grid">
+                <div class="field"><span>服务商</span><b>GitHub</b></div>
+                <div class="field"><span>名称</span><b>heqifeng@example.com</b></div>
+                <div class="field"><span>匹配域名</span><b>github.com, gist.github.com</b></div>
+                <div class="field"><span>备注</span><b>个人账号</b></div>
+              </div>
+              <div class="actions" style="grid-template-columns: 1fr 1fr; margin-top: 18px"><button class="primary">保存信息</button><button class="secondary">测试生成验证码</button></div>
+              <div class="danger-zone">危险操作折叠展示：删除条目、清空全部、明文导出。</div>
+            </section>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>导入向导建议流程</h2>
+          <p>导入不再是“粘贴后立即写入”，而是先预览影响，再让用户确认；重复、覆盖和失败要在写入前可见。</p>
+          <div class="flow">
+            <div class="step"><b>选择来源</b><span>Aegis 文件、Google Authenticator 二维码、迁移文本或单条 otpauth。</span></div>
+            <div class="step"><b>读取内容</b><span>需要 Aegis 密码时只在本地解密，并明确密码不会保存。</span></div>
+            <div class="step"><b>预览结果</b><span>标记新增、重复、将覆盖、无效条目和缺失字段。</span></div>
+            <div class="step"><b>确认写入</b><span>用户确认后才写入本地存储，导入完成后展示下一步。</span></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
