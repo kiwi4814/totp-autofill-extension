@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 function makeElement(initial = {}) {
@@ -175,6 +176,28 @@ const baseEntries = [
   },
 ];
 
+test('popup status region announces updates accessibly', async () => {
+  const html = await readFile('/Users/heqifeng/VibeCoding/totp-autofill-extension/src/popup.html', 'utf8');
+
+  assert.match(html, /id="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="status"[^>]*role="status"/);
+});
+
+test('popup styles keep interactive controls at accessible touch target sizes', async () => {
+  const css = await readFile('/Users/heqifeng/VibeCoding/totp-autofill-extension/src/styles.css', 'utf8');
+
+  assert.match(css, /button, \.button-like \{[\s\S]*min-height: 44px;/);
+  assert.match(css, /textarea, input\[type="search"\], input\[type="text"\], input\[type="password"\] \{[\s\S]*min-height: 44px;/);
+});
+
+test('popup styles expose clear keyboard focus states', async () => {
+  const css = await readFile('/Users/heqifeng/VibeCoding/totp-autofill-extension/src/styles.css', 'utf8');
+
+  assert.match(css, /button:focus-visible, \.button-like:focus-visible, textarea:focus-visible, input\[type="search"\]:focus-visible, input\[type="text"\]:focus-visible, input\[type="password"\]:focus-visible \{/);
+  assert.match(css, /button:focus-visible, \.button-like:focus-visible, textarea:focus-visible, input\[type="search"\]:focus-visible, input\[type="text"\]:focus-visible, input\[type="password"\]:focus-visible \{[\s\S]*outline:/);
+  assert.match(css, /button:focus-visible, \.button-like:focus-visible, textarea:focus-visible, input\[type="search"\]:focus-visible, input\[type="text"\]:focus-visible, input\[type="password"\]:focus-visible \{[\s\S]*outline-offset:/);
+});
+
 test('popup empty state explains how to import entries when storage is empty', async () => {
   const { elements } = await setupPopup([]);
 
@@ -193,8 +216,8 @@ test('popup shows actionable fill error copy when the page rejects autofill', as
   await fillButton.listeners.click();
   await flush();
 
-  assert.match(elements['#status'].textContent, /没有找到验证码输入框/);
-  assert.match(elements['#status'].textContent, /你仍然可以先复制验证码再手动粘贴/);
+  assert.match(elements['#status'].textContent, /当前页面没有找到验证码输入框/);
+  assert.match(elements['#status'].textContent, /复制验证码后手动粘贴/);
 
   cleanupGlobals();
 });
@@ -208,6 +231,8 @@ test('single matched entry emphasizes the primary fill action', async () => {
   assert.equal(entryCards.length, 1);
   assert.equal(fillButton.textContent, '立即填充当前网站');
   assert.equal(copyButton.textContent, '复制备用');
+  assert.match(elements['#status'].textContent, /已匹配当前网站/);
+  assert.match(elements['#status'].textContent, /可直接填充，也可复制备用/);
 
   cleanupGlobals();
 });
@@ -215,7 +240,8 @@ test('single matched entry emphasizes the primary fill action', async () => {
 test('unmatched popup shows search controls and the default recommended list', async () => {
   const { elements } = await setupPopup(baseEntries);
 
-  assert.match(elements['#status'].textContent, /没有自动匹配/);
+  assert.match(elements['#status'].textContent, /当前网站还没有自动匹配/);
+  assert.match(elements['#status'].textContent, /搜索并选择正确条目后，会保存域名绑定/);
   assert.equal(elements['#host'].textContent, 'vault-nowhere.test');
   assert.ok(elements['#entries'].querySelector('.popup-search-input'));
   assert.equal(elements['#entries'].querySelector('.popup-search-input').placeholder, '搜索服务商 / 名称 / 匹配域名');
@@ -269,7 +295,8 @@ test('multiple matched entries show a match summary and searchable list', async 
   const { elements } = await setupPopup(entries, { url: 'https://shared.test/login' });
   const searchInput = elements['#entries'].querySelector('.popup-search-input');
 
-  assert.match(elements['#status'].textContent, /找到 2 个匹配条目/);
+  assert.match(elements['#status'].textContent, /当前网站匹配到 2 个条目/);
+  assert.match(elements['#status'].textContent, /你也可以先搜索再填充/);
   assert.equal(searchInput.placeholder, '搜索服务商 / 名称 / 匹配域名');
 
   searchInput.value = 'contoso';
@@ -295,6 +322,18 @@ test('popup warns when the current code is about to refresh', async () => {
     .filter((child) => String(child.className).includes('entry-card'))[0];
 
   assert.match(entryCard.querySelector('.countdown-hint').textContent, /验证码即将刷新/);
+  assert.match(entryCard.querySelector('.countdown-hint').textContent, /复制备用/);
+
+  cleanupGlobals();
+});
+
+test('popup explains the recovery path when it cannot read the current site', async () => {
+  const { elements } = await setupPopup([baseEntries[0]], { url: 'about:blank' });
+
+  assert.equal(elements['#host'].textContent, '无法读取当前网站');
+  assert.match(elements['#status'].textContent, /无法读取当前网站/);
+  assert.match(elements['#status'].textContent, /去设置页管理条目/);
+  assert.match(elements['#status'].textContent, /复制验证码后手动使用/);
 
   cleanupGlobals();
 });
@@ -313,7 +352,8 @@ test('unmatched popup bind-and-fill saves the selected host and sends the code',
   assert.equal(sentMessages[0].message.type, 'FILL_TOTP_CODE');
   assert.match(sentMessages[0].message.code, /^\d{6}$/);
   assert.deepEqual(getStoredEntries()[1].domains, ['portal.contoso.test', 'vault-nowhere.test']);
-  assert.match(elements['#status'].textContent, /以后会自动匹配/);
+  assert.match(elements['#status'].textContent, /已绑定 vault-nowhere.test/);
+  assert.match(elements['#status'].textContent, /下次可直接匹配/);
 
   cleanupGlobals();
 });

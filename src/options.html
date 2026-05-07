@@ -57,24 +57,21 @@
           <button id="confirmImport" disabled>确认写入本地存储</button>
         </div>
         <div id="importPreview" class="import-preview muted">选择文件或粘贴内容后，先预览将新增或更新的条目。</div>
-        <div id="status" class="status"></div>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
       </section>
 
       <section class="card stack entries-panel">
-        <div class="row">
-          <div>
-            <p class="eyebrow">条目管理</p>
-            <h2>已保存条目</h2>
-          </div>
-          <button id="clearAll" class="danger">清空全部</button>
+        <div>
+          <p class="eyebrow">条目管理</p>
+          <h2>已保存条目</h2>
         </div>
         <input id="search" type="search" placeholder="搜索 服务商 / 名称 / 匹配域名">
         <div class="entry-workspace">
           <div id="entries" class="list entry-list" aria-label="条目列表"></div>
-          <div id="entryDetail" class="entry-detail" aria-label="条目详情"></div>
-        </div>
-        <div class="danger-zone">
-          删除单条或清空全部属于危险操作；后续会迁入独立危险区域并增加更明确的确认流程。
+          <div class="stack entry-detail-column">
+            <div id="entryDetail" class="entry-detail" aria-label="条目详情"></div>
+            <div id="dangerActions" class="card stack danger-actions" aria-label="危险操作区"></div>
+          </div>
         </div>
       </section>
     </div>

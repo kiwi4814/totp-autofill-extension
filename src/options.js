@@ -4,6 +4,7 @@ import { importAnyText } from './core/importers.js';
 const statusEl = document.querySelector('#status');
 const entriesEl = document.querySelector('#entries');
 const entryDetailEl = document.querySelector('#entryDetail') || entriesEl;
+const dangerActionsEl = document.querySelector('#dangerActions') || entryDetailEl;
 const searchEl = document.querySelector('#search');
 const importPreviewEl = document.querySelector('#importPreview');
 const confirmImportEl = document.querySelector('#confirmImport');
@@ -24,22 +25,36 @@ function clearImportPreview() {
   pendingImportEntries = [];
   setConfirmImportEnabled(false);
   if (importPreviewEl) {
-    importPreviewEl.textContent = '选择文件或粘贴内容后，先预览将新增或更新的条目。';
+    importPreviewEl.textContent = '选择文件或粘贴内容后，先预览将新增、覆盖或跳过的条目。';
   }
+}
+
+function classifyImportEntries(imported, existing) {
+  const existingById = new Map(existing.map((entry) => [entry.id, entry]));
+  return imported.map((entry) => {
+    const current = existingById.get(entry.id);
+    if (!current) {
+      return { type: '新增', entry };
+    }
+    const importedText = JSON.stringify(entry);
+    const currentText = JSON.stringify(current);
+    return { type: importedText === currentText ? '重复' : '将覆盖', entry };
+  });
 }
 
 async function renderImportPreview(imported) {
   const existing = await getEntries();
-  const existingIds = new Set(existing.map((entry) => entry.id));
-  const newCount = imported.filter((entry) => !existingIds.has(entry.id)).length;
-  const updateCount = imported.length - newCount;
-  const labels = imported
+  const classified = classifyImportEntries(imported, existing);
+  const newCount = classified.filter((item) => item.type === '新增').length;
+  const overwriteCount = classified.filter((item) => item.type === '将覆盖').length;
+  const duplicateCount = classified.filter((item) => item.type === '重复').length;
+  const labels = classified
     .slice(0, 5)
-    .map((entry) => `${existingIds.has(entry.id) ? '更新' : '新增'}：${entry.issuer || entry.account || entry.label}`)
+    .map(({ type, entry }) => `${type}：${entry.issuer || entry.account || entry.label}`)
     .join('；');
-  const more = imported.length > 5 ? `；另有 ${imported.length - 5} 个条目` : '';
+  const more = classified.length > 5 ? `；另有 ${classified.length - 5} 个条目` : '';
   if (importPreviewEl) {
-    importPreviewEl.textContent = `准备导入 ${imported.length} 个条目：新增 ${newCount} 个，更新 ${updateCount} 个。${labels}${more}`;
+    importPreviewEl.textContent = `准备导入 ${imported.length} 个条目：新增 ${newCount} 个，将覆盖 ${overwriteCount} 个，重复 ${duplicateCount} 个。${labels}${more}`;
   }
 }
 
@@ -54,7 +69,7 @@ async function previewImportText(text) {
   pendingImportEntries = imported;
   await renderImportPreview(imported);
   setConfirmImportEnabled(true);
-  setStatus(`已预览 ${imported.length} 个条目，请确认后写入本地存储`);
+  setStatus(`已完成 ${imported.length} 个条目的导入预览，请确认后写入本地存储`);
 }
 
 async function confirmImport() {
@@ -66,7 +81,7 @@ async function confirmImport() {
   await addEntries(imported);
   pendingImportText = '';
   clearImportPreview();
-  setStatus(`已导入/更新 ${imported.length} 个条目`);
+  setStatus(`已导入并更新 ${imported.length} 个条目`);
   await renderEntries();
 }
 
@@ -100,6 +115,14 @@ function domainsText(entry) {
   return (entry.domains || []).join(', ');
 }
 
+function deleteEntryMessage(entry) {
+  return `确认删除当前条目“${entry.label}”？这会移除它的备注和匹配域名。`;
+}
+
+function clearAllEntriesMessage() {
+  return '确认清空本地保存的全部 TOTP 条目？这会删除所有条目、备注和匹配域名。';
+}
+
 async function saveEntryFromDetail(detail, entry) {
   const issuer = detail.querySelector('.edit-issuer').value;
   const account = detail.querySelector('.edit-account').value;
@@ -109,7 +132,7 @@ async function saveEntryFromDetail(detail, entry) {
     .map((domain) => domain.trim())
     .filter(Boolean);
   await updateEntry(entry.id, { issuer, account, note, domains });
-  setStatus(`已保存 ${issuer || account || entry.label}`);
+  setStatus(`已保存条目：${issuer || account || entry.label}`);
   await renderEntries();
 }
 
@@ -137,12 +160,9 @@ function renderEntryDetail(entry) {
   const card = document.createElement('section');
   card.className = 'card stack entry-editor';
   card.innerHTML = `
-    <div class="row">
-      <div>
-        <div class="entry-title"></div>
-        <div class="entry-subtitle"></div>
-      </div>
-      <button class="danger delete">删除</button>
+    <div>
+      <div class="entry-title"></div>
+      <div class="entry-subtitle"></div>
     </div>
     <label>服务商 <input class="edit-issuer" type="text"></label>
     <label>名称 <input class="edit-account" type="text"></label>
@@ -159,13 +179,60 @@ function renderEntryDetail(entry) {
   card.querySelector('.edit-note').value = entry.note || '';
   card.querySelector('.edit-domains').value = domainsText(entry);
   card.querySelector('.save').addEventListener('click', () => saveEntryFromDetail(card, entry).catch((error) => setStatus(error.message, true)));
-  card.querySelector('.delete').addEventListener('click', async () => {
-    await deleteEntry(entry.id);
+  return card;
+}
+
+function renderDangerZone(entry) {
+  const card = document.createElement('section');
+  card.className = 'card stack danger-actions-card';
+  card.innerHTML = `
+    <div>
+      <p class="eyebrow">危险操作</p>
+      <h2>删除或清空</h2>
+    </div>
+    <p class="muted danger-copy"></p>
+    <div class="small-actions danger-actions-list"></div>
+  `;
+
+  const copy = card.querySelector('.danger-copy');
+  const actions = card.querySelector('.danger-actions-list');
+
+  if (entry) {
+    copy.textContent = '这些操作无法撤销。删除当前条目只影响当前选中的条目；清空全部会移除本地全部条目。';
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'danger danger-delete-entry';
+    deleteButton.textContent = '删除当前条目';
+    deleteButton.addEventListener('click', async () => {
+      const ok = confirm(deleteEntryMessage(entry));
+      if (!ok) return;
+      await deleteEntry(entry.id);
+      selectedEntryId = '';
+      setStatus(`已删除条目：${entry.label}`);
+      await renderEntries();
+    });
+    actions.append(deleteButton);
+  } else {
+    copy.textContent = '当前没有可删除的条目；清空全部会移除本地全部条目。';
+  }
+
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.id = 'clearAll';
+  clearButton.className = 'danger danger-clear-all';
+  clearButton.textContent = '清空全部条目';
+  clearButton.addEventListener('click', async () => {
+    const ok = confirm(clearAllEntriesMessage());
+    if (!ok) return;
+    await clearEntries();
     selectedEntryId = '';
-    setStatus(`已删除 ${entry.label}`);
+    setStatus('已清空全部条目');
     await renderEntries();
   });
-  return card;
+  actions.append(clearButton);
+
+  dangerActionsEl.replaceChildren(card);
 }
 
 async function renderEntries() {
@@ -180,13 +247,16 @@ async function renderEntries() {
     hint.className = 'card muted';
     hint.textContent = '选择左侧条目后，在这里编辑服务商、名称、备注和匹配域名。';
     entryDetailEl.replaceChildren(hint);
+    renderDangerZone(null);
     return;
   }
   if (!entries.some((entry) => entry.id === selectedEntryId)) {
     selectedEntryId = entries[0].id;
   }
   entriesEl.replaceChildren(...entries.map((entry) => renderEntrySummary(entry)));
-  entryDetailEl.replaceChildren(renderEntryDetail(entries.find((entry) => entry.id === selectedEntryId)));
+  const selectedEntry = entries.find((entry) => entry.id === selectedEntryId);
+  entryDetailEl.replaceChildren(renderEntryDetail(selectedEntry));
+  renderDangerZone(selectedEntry);
 }
 
 document.querySelector('#importButton').addEventListener('click', async () => {
@@ -219,15 +289,6 @@ document.querySelector('#qrImport').addEventListener('change', async (event) => 
   } catch (error) {
     setStatus(error.message, true);
   }
-});
-
-document.querySelector('#clearAll').addEventListener('click', async () => {
-  const ok = confirm('确认清空本地保存的所有 TOTP 条目？');
-  if (!ok) return;
-  await clearEntries();
-  selectedEntryId = '';
-  setStatus('已清空');
-  await renderEntries();
 });
 
 confirmImportEl?.addEventListener('click', () => confirmImport().catch((error) => setStatus(error.message, true)));

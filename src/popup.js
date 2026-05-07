@@ -18,7 +18,7 @@ function setStatus(text, isError = false) {
 }
 
 function fillErrorMessage(message = '填充失败') {
-  return `${message}；你仍然可以先复制验证码再手动粘贴。`;
+  return `${message}；你可以复制验证码后手动粘贴。`;
 }
 
 async function getActiveTab() {
@@ -28,7 +28,7 @@ async function getActiveTab() {
 
 async function copyCode(code) {
   await navigator.clipboard.writeText(code);
-  setStatus('验证码已复制');
+  setStatus('已复制验证码，可手动粘贴');
 }
 
 async function fillCode(code) {
@@ -36,7 +36,7 @@ async function fillCode(code) {
   await chrome.scripting.executeScript({ target: { tabId: currentTab.id }, files: ['src/content/autofill.js'] });
   const response = await chrome.tabs.sendMessage(currentTab.id, { type: 'FILL_TOTP_CODE', code });
   if (!response?.ok) throw new Error(fillErrorMessage(response?.error || '填充失败'));
-  setStatus(response.mode === 'split' ? '已填充到多格验证码输入框' : '已填充到当前页面');
+  setStatus(response.mode === 'split' ? '已填充到验证码输入框组' : '已填充到当前网站');
 }
 
 async function bindAndFill(entry, code) {
@@ -44,7 +44,7 @@ async function bindAndFill(entry, code) {
     await addEntryDomain(entry.id, currentHost);
   }
   await fillCode(code);
-  if (currentHost) setStatus(`已绑定 ${currentHost}，以后会自动匹配`);
+  if (currentHost) setStatus(`已绑定 ${currentHost}，下次可直接匹配`);
 }
 
 function renderEmpty(message, hint = '点击上方“导入/管理”导入 Aegis JSON、迁移二维码或手动粘贴 otpauth 内容。') {
@@ -174,7 +174,7 @@ async function renderEntries() {
         const countdownHint = card.querySelector('.countdown-hint');
         if (countdownHint) {
           countdownHint.textContent = remaining <= 7
-            ? '验证码即将刷新，建议稍等下一组再填充。'
+            ? '验证码即将刷新，建议先复制备用，或稍等下一组再填充。'
             : '如自动填充失败，可以复制验证码手动粘贴。';
         }
         const fillButton = card.querySelector('.fill');
@@ -216,13 +216,13 @@ async function init() {
   currentEntries = fallbackMode ? entries : matches;
   searchQuery = '';
   if (fallbackMode) {
-    setStatus('当前网站没有自动匹配；搜索并选择正确条目后会保存域名绑定。');
+    setStatus('当前网站还没有自动匹配；搜索并选择正确条目后，会保存域名绑定。');
   } else if (matches.length === 1) {
-    setStatus('已匹配当前网站；可直接填充或复制备用。');
+    setStatus('已匹配当前网站；可直接填充，也可复制备用。');
   } else if (matches.length > 1) {
-    setStatus(`找到 ${matches.length} 个匹配条目；优先显示最可能的条目，也可以搜索。`);
+    setStatus(`当前网站匹配到 ${matches.length} 个条目；你也可以先搜索再填充。`);
   } else if (!currentHost) {
-    setStatus('无法读取当前网站；可以在设置页管理条目，或复制验证码手动粘贴。');
+    setStatus('无法读取当前网站；你可以去设置页管理条目，或复制验证码后手动使用。');
   }
   await renderEntries();
   setInterval(renderEntries, 1000);

@@ -155,13 +155,38 @@ p { margin: 8px 0; }
   align-items: start;
 }
 
-.danger-zone {
-  border-radius: 12px;
-  padding: 10px;
-  background: var(--danger-soft);
+.entry-detail-column {
+  display: grid;
+  gap: 12px;
+}
+
+.danger-actions {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.danger-actions-card {
+  border-color: color-mix(in srgb, var(--danger), var(--border) 55%);
+  background: color-mix(in srgb, var(--danger-soft), var(--card) 35%);
+}
+
+.danger-copy {
   color: var(--danger);
-  font-size: 12px;
-  font-weight: 700;
+}
+
+.danger-actions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.danger-delete-entry,
+.danger-clear-all {
+  border-color: color-mix(in srgb, var(--danger), var(--border) 35%);
+  background: var(--card);
+  color: var(--danger);
 }
 
 .entry-workspace {
@@ -198,6 +223,7 @@ button, .button-like {
   border-radius: 9px;
   background: var(--card);
   color: var(--text);
+  min-height: 44px;
   padding: 8px 10px;
   cursor: pointer;
   font: inherit;
@@ -211,6 +237,10 @@ button.primary {
 
 button.danger { color: var(--danger); }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
+button:focus-visible, .button-like:focus-visible, textarea:focus-visible, input[type="search"]:focus-visible, input[type="text"]:focus-visible, input[type="password"]:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary), white 18%);
+  outline-offset: 2px;
+}
 
 .code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -246,6 +276,7 @@ textarea, input[type="search"], input[type="text"], input[type="password"] {
   border-radius: 10px;
   background: var(--card);
   color: var(--text);
+  min-height: 44px;
   padding: 10px;
   font: inherit;
 }
